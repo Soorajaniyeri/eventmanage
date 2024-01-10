@@ -4,9 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:myproject/const/cities.dart';
 import 'package:myproject/widgets/buttonDesign.dart';
+import 'package:myproject/widgets/submit_btn.dart';
 import 'package:myproject/widgets/textfielddesign.dart';
 
 class CatItemManage extends StatefulWidget {
@@ -20,6 +23,7 @@ class _CatItemManageState extends State<CatItemManage> {
   File? selectedImage;
   String? imgUrl;
   String? date;
+  bool isLoading = false;
 
   String? selectedCity;
   String? selectedLoc;
@@ -40,6 +44,25 @@ class _CatItemManageState extends State<CatItemManage> {
 
     if (store != null) {
       setState(() {
+        showDialog(
+          barrierDismissible: false,
+          context: context,
+          builder: (context) {
+            return const AlertDialog(
+              surfaceTintColor: Colors.transparent,
+              backgroundColor: Colors.transparent,
+              content: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    backgroundColor: Colors.white,
+                    color: Colors.black,
+                  )
+                ],
+              ),
+            );
+          },
+        );
         selectedImage = File(store.path);
       });
 
@@ -48,22 +71,12 @@ class _CatItemManageState extends State<CatItemManage> {
           .child("uploadedimage/${selectedImage!.path}");
       UploadTask task = ref.putFile(selectedImage!);
 
-      if (context.mounted) {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return const AlertDialog(
-              title: Text("please wait"),
-            );
-          },
-        );
-      }
-
       await task.whenComplete(() async {
-        Navigator.pop(context);
-
         var url = await ref.getDownloadURL();
         imgUrl = url;
+        if (context.mounted) {
+          Navigator.pop(context);
+        }
       });
     }
   }
@@ -75,6 +88,26 @@ class _CatItemManageState extends State<CatItemManage> {
       required String duration,
       required String location,
       required String dt}) async {
+    showDialog(
+      barrierDismissible: false,
+      context: context,
+      builder: (context) {
+        return const AlertDialog(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          content: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                backgroundColor: Colors.white,
+                color: Colors.black,
+              )
+            ],
+          ),
+        );
+      },
+    );
+
     await FirebaseFirestore.instance.collection("itemss").add({
       "catid": selectedCategory,
       "title": title,
@@ -85,6 +118,9 @@ class _CatItemManageState extends State<CatItemManage> {
       'datetime': dt,
       "image": imgUrl
     });
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
   }
 
   String? selectedCategory;
@@ -137,7 +173,7 @@ class _CatItemManageState extends State<CatItemManage> {
                         width: 30,
                       ),
                       DropdownButton(
-                        hint: const Text("hello"),
+                        hint: const Text("Select Categories"),
                         value: selectedCategory,
                         items: dropdownMenuEntries,
                         onChanged: (String? value) {
@@ -182,6 +218,7 @@ class _CatItemManageState extends State<CatItemManage> {
             height: 10,
           ),
           TextFieldDesign(
+              inputType: TextInputType.number,
               brdrClr: Colors.black,
               hintText: 'Event ticket Prize',
               controller: priceCtrl),
@@ -189,6 +226,7 @@ class _CatItemManageState extends State<CatItemManage> {
             height: 10,
           ),
           TextFieldDesign(
+              inputType: TextInputType.number,
               brdrClr: Colors.black,
               hintText: "Duration",
               controller: durationCtrl),
@@ -229,32 +267,65 @@ class _CatItemManageState extends State<CatItemManage> {
           ),
           ButtonDesign(
               margin: 90,
-              buttonText: "Choose Date",
+              buttonText: date ?? "Choose Date",
               onTap: () async {
                 DateTime? store = await showDatePicker(
                     context: context,
                     initialDate: DateTime.now(),
                     firstDate: DateTime(2001),
-                    lastDate: DateTime(2024));
+                    lastDate: DateTime(2050));
                 if (store != null) {
-                  date = "${Consts().cities[store.month]} ${store.day}";
+                  setState(() {
+                    date = "${Consts().month[store.month]} ${store.day}";
+                  });
                 }
               }),
           const SizedBox(
             height: 10,
           ),
-          ButtonDesign(
-              margin: 90,
-              buttonText: "Submit",
-              onTap: () {
-                newEvent(
-                    title: titleCtrl.text,
-                    subTitle: subTitleCtrl.text,
-                    price: int.parse(priceCtrl.text),
-                    duration: "${durationCtrl.text} Hr",
-                    location: selectedLoc!,
-                    dt: date!);
-              }),
+          const SizedBox(
+            height: 20,
+          ),
+          SubmitButtonDesign(
+              margin: 40,
+              bgClr: Colors.red,
+              buttonText: isLoading == false
+                  ? Text(
+                      "Submit",
+                      style: GoogleFonts.b612(
+                          textStyle: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold)),
+                    )
+                  : const Center(
+                      child: CircularProgressIndicator(
+                      backgroundColor: Colors.white,
+                      color: Colors.black,
+                    )),
+              onTap: () async {
+                if (titleCtrl.text.isNotEmpty &&
+                    subTitleCtrl.text.isNotEmpty &&
+                    selectedImage != null &&
+                    priceCtrl.text.isNotEmpty &&
+                    durationCtrl.text.isNotEmpty &&
+                    date != null &&
+                    selectedCategory != null) {
+                  await newEvent(
+                      title: titleCtrl.text,
+                      subTitle: subTitleCtrl.text,
+                      price: int.parse(priceCtrl.text),
+                      duration: "${durationCtrl.text} Hr",
+                      location: selectedLoc!,
+                      dt: date!);
+                  await Fluttertoast.showToast(msg: "New Event added");
+
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                } else {
+                  Fluttertoast.showToast(msg: "Please complete all fields");
+                }
+              })
         ]),
       )),
     );
